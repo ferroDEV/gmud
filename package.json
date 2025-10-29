@@ -1,0 +1,12 @@
+{
+  "name": "gmud-fullstack",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:api": "pnpm -C backend dev",
+    "dev:web": "pnpm -C frontend dev"
+  }
+}
