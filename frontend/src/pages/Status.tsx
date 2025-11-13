@@ -1,66 +1,165 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { del, get, patch, post } from "../lib/api";
+import React, { useEffect, useState } from "react";
+import { ApiError, del, get, post } from "../lib/api";
 
-type Row = { id:number; nome:string; ordem:number };
+type StatusItem = {
+  id: number;
+  nome: string;
+  ordem: number;
+  tipo: string;
+};
 
-export default function StatusPage(){
-  const [rows, setRows] = useState<Row[]>([]);
-  const [nome, setNome] = useState(""); const [ordem,setOrdem] = useState(1);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [draft, setDraft] = useState<{ nome:string; ordem:number }>({ nome:"", ordem:1 });
+export default function Status() {
+  const [rows, setRows] = useState<StatusItem[]>([]);
+  const [nome, setNome] = useState("");
+  const [ordem, setOrdem] = useState<number | string>("");
+  const [tipo, setTipo] = useState("SOLICITAÇÃO");
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const load = ()=> get<Row[]>("/api/status").then(setRows);
-  useEffect(load,[]);
+  const load = async () => {
+    try {
+      const data = await get<StatusItem[]>("/api/status");
+      data.sort((a, b) => {
+        if (a.tipo === b.tipo) return a.ordem - b.ordem;
+        return a.tipo.localeCompare(b.tipo, "pt-BR");
+      });
+      setRows(data);
+    } catch (e: any) {
+      const ae = e as ApiError;
+      setErr(ae.message || ae.error);
+    }
+  };
 
-  const add = async ()=>{ if(!nome.trim()) return; await post("/api/status", { nome, ordem }); setNome(""); setOrdem((o)=>o+1); load(); };
-  const startEdit = (r:Row)=>{ setEditId(r.id); setDraft({ nome:r.nome, ordem:r.ordem }); };
-  const save = async ()=>{ if(editId==null) return; await patch(`/api/status/${editId}`, draft); setEditId(null); load(); };
-  const remove = async (id:number)=>{ await del(`/api/status/${id}`); load(); };
+  useEffect(() => {
+    load();
+  }, []);
 
-  const sorted = useMemo(()=> [...rows].sort((a,b)=>a.ordem - b.ordem), [rows]);
+  const add = async () => {
+    setErr(null);
+    if (!nome.trim()) return setErr("Informe o nome do status.");
+    if (!ordem) return setErr("Informe a ordem.");
+    if (!tipo) return setErr("Selecione o tipo.");
+
+    setSaving(true);
+    try {
+      await post("/api/status", {
+        nome,
+        ordem: Number(ordem),
+        tipo,
+      });
+      setNome("");
+      setOrdem("");
+      setTipo("SOLICITAÇÃO");
+      await load();
+    } catch (e: any) {
+      const ae = e as ApiError;
+      setErr(ae.message || ae.error || "Erro ao salvar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id: number) => {
+    if (!confirm("Excluir este status?")) return;
+    try {
+      await del(`/api/status/${id}`);
+      setRows(rows.filter((r) => r.id !== id));
+    } catch (e: any) {
+      const ae = e as ApiError;
+      setErr(ae.message || ae.error);
+    }
+  };
 
   return (
     <div className="grid" style={{ gap: 16 }}>
       <div className="card">
-        <div className="card-h"><strong>Cadastrar Status</strong></div>
-        <div className="card-b grid grid-3">
-          <div><label>Nome</label><input className="input" value={nome} onChange={e=>setNome(e.target.value)} placeholder="Ex.: Fila de Desenvolvimento" /></div>
-          <div><label>Ordem</label><input className="input" type="number" value={ordem} onChange={e=>setOrdem(parseInt(e.target.value || '1',10))} /></div>
-          <div style={{ display: "flex", alignItems: "end" }}><button className="btn primary" onClick={add}>Salvar</button></div>
+        <div className="card-h">
+          <strong>Status</strong>
+          <div className="help">Cadastro</div>
+        </div>
+
+        <div className="card-b grid" style={{ gap: 12 }}>
+          {err && <div className="alert">{err}</div>}
+
+          <div className="grid grid-3">
+            <div>
+              <label>Nome</label>
+              <input
+                className="input"
+                placeholder="Nome do status"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label>Ordem</label>
+              <input
+                className="input"
+                type="number"
+                placeholder="Ordem"
+                value={ordem}
+                onChange={(e) => setOrdem(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label>Tipo</label>
+              <select
+                className="input"
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value)}
+              >
+                <option value="SOLICITAÇÃO">SOLICITAÇÃO</option>
+                <option value="GMUD">GMUD</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "end" }}>
+            <button className="btn accent" onClick={add} disabled={saving}>
+              {saving ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="card">
-        <div className="card-h"><strong>Status</strong></div>
-        <div className="card-b grid" style={{ gap: 8 }}>
-          {sorted.map(s=>(
-            <div key={s.id} className="grid" style={{ gridTemplateColumns: "1fr auto", alignItems: "center" }}>
-              {editId===s.id ? (
-                <div className="grid grid-3">
-                  <div><label>Nome</label><input className="input" value={draft.nome} onChange={e=>setDraft({ ...draft, nome:e.target.value })} /></div>
-                  <div><label>Ordem</label><input className="input" type="number" value={draft.ordem} onChange={e=>setDraft({ ...draft, ordem: parseInt(e.target.value || '1',10) })} /></div>
-                </div>
-              ) : (
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <span className="badge">#{s.ordem}</span>
-                  <strong>{s.nome}</strong>
-                </div>
+        <div className="card-h">
+          <strong>Lista de Status</strong>
+        </div>
+        <div className="card-b">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Ordem</th>
+                <th>Tipo</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.nome}</td>
+                  <td>{r.ordem}</td>
+                  <td>{r.tipo}</td>
+                  <td>
+                    <button className="btn" onClick={() => remove(r.id)}>
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="help" style={{ textAlign: "center" }}>
+                    Nenhum status cadastrado
+                  </td>
+                </tr>
               )}
-              <div style={{ justifySelf: "end", display:"flex", gap:8 }}>
-                {editId===s.id ? (
-                  <>
-                    <button className="btn" onClick={save}>Salvar</button>
-                    <button className="btn" onClick={()=>setEditId(null)}>Cancelar</button>
-                  </>
-                ) : (
-                  <>
-                    <button className="btn" onClick={()=>startEdit(s)}>Editar</button>
-                    <button className="btn destructive" onClick={()=>remove(s.id)}>Excluir</button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

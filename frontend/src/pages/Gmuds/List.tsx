@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { get } from "../../lib/api";
+import { ApiError, get } from "../../lib/api";
 import { Link } from "react-router-dom";
 
 type Row = {
@@ -14,9 +14,17 @@ const statusTitle = (i:number)=> {
 
 export default function ListGmuds(){
   const [rows,setRows] = useState<Row[]>([]);
+  const [err,setErr] = useState<string|null>(null);
   const [groupByAnalista, setGroup] = useState(true);
-  const load = ()=> get<Row[]>("/api/gmuds").then(setRows);
-  useEffect(load,[]);
+  const load = () => {
+    get<Row[]>("/api/gmuds")
+      .then(setRows)
+      .catch((e: ApiError) => setErr(e.message || e.error));
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const grouped = useMemo(()=>{
     if(!groupByAnalista) return null;
@@ -42,6 +50,7 @@ export default function ListGmuds(){
           </label>
         </div>
         <div className="card-b">
+          {err && <div className="alert" style={{ marginBottom: 8 }}>{err}</div>}
           {!groupByAnalista ? (
             <table className="table">
               <thead><tr><th>Título</th><th>Solicitante</th><th>Analista</th><th>Status</th><th style={{ width: 90 }}>Ações</th></tr></thead>

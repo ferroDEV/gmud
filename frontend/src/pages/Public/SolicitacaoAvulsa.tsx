@@ -1,20 +1,27 @@
 import React, { useState } from "react";
-import { post } from "../../lib/api";
+import { ApiError, post } from "../../lib/api";
 import { useNavigate } from "react-router-dom";
 
 export default function SolicitacaoAvulsa(){
   const [f, setF] = useState({ titulo:"", area:"", solicitanteId: 1, analistaRequisitosId: undefined as number|undefined });
+  const [err, setErr] = useState<string|null>(null);
   const nav = useNavigate();
   const save = async ()=>{
-    await post("/api/solicitacoes", f);
-    alert("Solicitação cadastrada. Entre no sistema para acompanhar.");
-    nav("/login");
+    try{
+      await post("/api/solicitacoes", f);
+      alert("Solicitação cadastrada. Entre no sistema para acompanhar.");
+      nav("/login");
+    }catch(e:any){
+      const ae = e as ApiError;
+      setErr(ae.message || "Erro ao salvar");
+    }
   };
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
       <div className="card" style={{ width: 640, maxWidth: "94vw" }}>
         <div className="card-h"><strong>Solicitação de GMUD</strong><div className="help">Tela pública avulsa</div></div>
         <div className="card-b grid grid-2">
+          {err && <div className="alert" style={{ gridColumn:"1 / -1" }}>{err}</div>}
           <div><label>Título</label><input className="input" value={f.titulo} onChange={e=>setF({ ...f, titulo: e.target.value })} /></div>
           <div><label>Área</label><input className="input" value={f.area} onChange={e=>setF({ ...f, area: e.target.value })} /></div>
           <div><label>ID do Solicitante</label><input className="input" type="number" value={f.solicitanteId} onChange={e=>setF({ ...f, solicitanteId: parseInt(e.target.value||'1',10) })} /></div>

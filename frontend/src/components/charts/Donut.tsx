@@ -1,10 +1,8 @@
 import React from 'react';
-
 export default function Donut({ data, size=140 }:{ data:{ label:string; value:number; color:string }[]; size?:number }){
   const total = data.reduce((a,b)=>a+b.value,0) || 1;
   let start = 0;
-  const r = size/2;
-  const cx = r, cy = r, strokeW = 18;
+  const r = size/2, cx=r, cy=r, strokeW=18;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>

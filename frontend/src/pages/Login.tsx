@@ -1,24 +1,28 @@
 import React, { useState } from "react";
 import { useAuth } from "../lib/auth";
+import { ApiError } from "../lib/api";
 
 export default function Login(){
-  const { login } = useAuth();
+  const { login, error } = useAuth();
   const [username, setU] = useState("");
   const [password, setP] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
-    try {
+    setLoading(true);
+    try{
       await login(username, password);
-      // Sem reload forçado: o AuthProvider já atualiza o estado.
-      window.location.href = "/"; // se preferir SPA puro, troque por: navigate("/");
-    } catch (e:any) {
-      setErr("Falha no login");
+      window.location.href = "/";
+    }catch(e:any){
+      const ae = e as ApiError;
+      setErr(ae?.message || ae?.error || "Falha no login");
+    } finally {
+      setLoading(false);
     }
   };
-
 
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
@@ -33,8 +37,8 @@ export default function Login(){
             <label>Senha</label>
             <input className="input" type="password" value={password} onChange={e=>setP(e.target.value)} />
           </div>
-          {err && <div className="help" style={{ color: "red" }}>{err}</div>}
-          <button className="btn primary" type="submit">Entrar</button>
+          {(err || error) && <div className="alert">{err || error}</div>}
+          <button className="btn primary" type="submit" disabled={loading}>{loading ? "Entrando..." : "Entrar"}</button>
         </form>
       </div>
     </div>

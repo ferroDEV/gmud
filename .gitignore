@@ -4,3 +4,4 @@ backend/prisma/
 node_modules
 node_modules\*
 node_modules/*
+gmud.zip

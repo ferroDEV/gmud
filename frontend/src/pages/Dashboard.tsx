@@ -3,10 +3,18 @@ import { get } from "../lib/api";
 import Sparkline from "../components/charts/Sparkline";
 import Bars from "../components/charts/Bars";
 import Donut from "../components/charts/Donut";
+import { toast } from "../components/Toast";
 
 export default function Dashboard(){
-  const [metrics, setMetrics] = useState<{ solicitacoes:number; gmuds:number; recursos:number }>({ solicitacoes:0, gmuds:0, recursos:0 });
-  useEffect(()=>{ get("/api/meta/metrics").then(setMetrics).catch(()=>{}); },[]);
+  const [metrics, setMetrics] = useState<{ solicitacoes:number; gmuds:number; recursos:number } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(()=>{
+    get("/api/meta/metrics").then(setMetrics).catch((e)=>{
+      setErr(e?.message || "Falha ao carregar métricas");
+      toast("Erro ao carregar métricas");
+    });
+  },[]);
 
   const line = [12, 18, 10, 22, 17, 28, 24, 30];
   const bars = [22, 40, 31, 55, 44];
@@ -19,9 +27,9 @@ export default function Dashboard(){
   return (
     <div className="grid" style={{ gap: 16 }}>
       <div className="grid grid-3">
-        <KPI title="Solicitações" value={metrics.solicitacoes} />
-        <KPI title="GMUDs" value={metrics.gmuds} />
-        <KPI title="Recursos" value={metrics.recursos} />
+        <KPI title="Solicitações" value={metrics?.solicitacoes ?? 0} />
+        <KPI title="GMUDs" value={metrics?.gmuds ?? 0} />
+        <KPI title="Recursos" value={metrics?.recursos ?? 0} />
       </div>
 
       <div className="card">
@@ -31,11 +39,11 @@ export default function Dashboard(){
           <div><div className="help" style={{ marginBottom: 6 }}>Tempo médio até Go Live</div><Bars data={bars} /></div>
           <div><div className="help" style={{ marginBottom: 6 }}>Distribuição de status</div><Donut data={pie} /></div>
         </div>
+        {err && <div className="card-b"><div className="alert">{err}</div></div>}
       </div>
     </div>
   );
 }
-
 function KPI({ title, value }:{ title:string; value:number }){
   return (
     <div className="card">

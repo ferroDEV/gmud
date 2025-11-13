@@ -4,7 +4,6 @@ import { prisma } from "../db/client";
 
 const r = Router();
 
-// Fluxos de status (fixos) expostos ao frontend
 r.get("/flows", authRequired, async (_req, res) => {
   const solicitacao = [
     { id: 1, titulo: "Análise de prioridade", papel: "REQUISITOS" },
@@ -25,14 +24,17 @@ r.get("/flows", authRequired, async (_req, res) => {
   res.json({ solicitacao, gmud });
 });
 
-// Indicadores simples (contagens)
 r.get("/metrics", authRequired, async (_req, res) => {
-  const [sol, gm, rec] = await Promise.all([
-    prisma.solicitacao.count(),
-    prisma.gMUD.count(),
-    prisma.recurso.count(),
-  ]);
-  res.json({ solicitacoes: sol, gmuds: gm, recursos: rec });
+  try {
+    const [sol, gm, rec] = await Promise.all([
+      prisma.solicitacao.count(),
+      prisma.gMUD.count(),
+      prisma.recurso.count(),
+    ]);
+    res.json({ solicitacoes: sol, gmuds: gm, recursos: rec });
+  } catch (err: any) {
+    res.status(500).json({ error: "db_error", message: "Falha ao consultar métricas.", details: { message: err?.message } });
+  }
 });
 
 export default r;

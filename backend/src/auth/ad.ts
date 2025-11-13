@@ -1,61 +1,109 @@
-import LdapAuth from "ldapauth-fork";
+import ldap from "ldapjs";
 import { config } from "../env";
+import { signJWT } from "./jwt";
 
+/**
+ * Autentica usuário no Active Directory usando ldapjs,
+ * buscando atributos e retornando status detalhado.
+ */
 export async function authWithAD(
   username: string,
   password: string
-): Promise<{ ok: boolean; name?: string; role?: string; groups?: string[] }> {
-  if (!config.ldap.host) {
-    return { ok: false };
-  }
+): Promise<{ ok: boolean; name?: string; email?: string; title?: string; error?: string }> {
+  const ldapHost = config.ldap.host;
+  const baseDN = config.ldap.baseDn;
+  const domain = baseDN.replace(/DC=/gi, "").replace(/,/g, "."); // ex: esprobrasil.local
+  const url = `ldap://${ldapHost}`;
+
+  const bindDN = `${username}@${domain}`;
+
+  const client = ldap.createClient({
+    url,
+    timeout: (config.ldap.timeout || 5) * 1000,
+    reconnect: false,
+  });
 
   return new Promise((resolve) => {
-    const ldap = new LdapAuth({
-      url: `ldap://${config.ldap.host}:389`,
-      bindDN: config.ldap.username,
-      bindCredentials: config.ldap.password,
-      searchBase: config.ldap.baseDn,
-      searchFilter: `(sAMAccountName=${username})`,
-      reconnect: true,
-      timeout: (config.ldap.timeout || 5) * 1000,
-      connectTimeout: (config.ldap.timeout || 5) * 1000,
-      tlsOptions: { rejectUnauthorized: false },
-    });
-
-    ldap.on("error", (err: any) => {
-      if (config.ldap.logging) console.error("LDAP error:", err);
-    });
-
-    ldap.authenticate(username, password, (err: any, user: any) => {
-      try {
-        ldap.close((_: any) => {});
-      } catch {}
-      if (err || !user) {
-        if (config.ldap.logging) console.error("LDAP auth failed:", err);
-        return resolve({ ok: false });
+    client.bind(bindDN, password, (err: { message: any; }) => {
+      if (err) {
+        if (config.ldap.logging)
+          console.error("❌ Falha na autenticação AD (bind):", err.message);
+        client.unbind();
+        return resolve({ ok: false, error: "invalid_credentials" });
       }
 
-      const name = user.displayName || user.cn || username;
-      const memberOf: string[] = Array.isArray(user.memberOf)
-        ? user.memberOf
-        : user.memberOf
-        ? [user.memberOf]
-        : [];
+      // Busca atributos adicionais do usuário autenticado
+      const searchOptions: ldap.SearchOptions = {
+        scope: "sub",
+        filter: `(sAMAccountName=${username})`,
+        attributes: [
+          "displayName",
+          "mail",
+          "title",
+          "department",
+          "sAMAccountName",
+          "telephoneNumber",
+          "memberOf"
+        ],
+      };
 
-      // Mapear role via LDAP_ROLE_MAP, se configurado
-      let role = "SOLICITANTE";
-      for (const map of config.ldap.roleMap) {
-        if (memberOf.some((g) => String(g).includes(map.dn))) {
-          role = map.role;
-          break;
+      client.search(baseDN, searchOptions, (searchErr, res) => {
+        if (searchErr) {
+          if (config.ldap.logging)
+            console.error("❌ Erro na busca LDAP:", searchErr.message);
+          client.unbind();
+          return resolve({ ok: false, error: "ldap_search_error" });
         }
-      }
 
-      if (config.ldap.logging) {
-        console.log("LDAP OK:", { username, name, groups: memberOf });
-      }
+        let found = false;
+        res.on("searchEntry", (entry) => {
+          found = true;
+          const attrs: Record<string, any> = {};
+          for (const a of entry.attributes || []) {
+            attrs[a.type] = Array.isArray(a.vals) ? a.vals[0] : a.vals;
+          }
+          const displayName =
+            attrs.displayName || attrs.cn || username || "Usuário";
+          const email = attrs.mail || "";
+          const title = attrs.title || "";
+          client.unbind();
+          resolve({
+            ok: true,
+            name: displayName,
+            email,
+            title,
+          });
+        });
 
-      resolve({ ok: true, name, role, groups: memberOf });
+        res.on("error", (e) => {
+          if (config.ldap.logging)
+            console.error("❌ Erro no processamento LDAP:", e.message);
+          client.unbind();
+          resolve({ ok: false, error: "ldap_search_failed" });
+        });
+
+        res.on("end", () => {
+          if (!found) {
+            client.unbind();
+            resolve({ ok: false, error: "user_not_found" });
+          }
+        });
+      });
     });
   });
+}
+
+/**
+ * Exemplo de uso interno (gera token JWT local se quiser).
+ */
+export async function authAndSignAD(username: string, password: string) {
+  const result = await authWithAD(username, password);
+  if (!result.ok) return result;
+  const token = signJWT({
+    uid: 0,
+    username,
+    role: "SOLICITANTE",
+    name: result.name || username,
+  });
+  return { ...result, token };
 }

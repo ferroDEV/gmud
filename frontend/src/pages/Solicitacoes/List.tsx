@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { get } from "../../lib/api";
+import { ApiError, get } from "../../lib/api";
 import { Link, useNavigate } from "react-router-dom";
 
 type Row = {
@@ -14,11 +14,19 @@ const statusTitle = (i:number)=> {
 
 export default function ListSolicitacoes(){
   const [rows,setRows] = useState<Row[]>([]);
+  const [err,setErr] = useState<string|null>(null);
   const [groupByAnalista, setGroup] = useState(true);
   const navigate = useNavigate();
 
-  const load = ()=> get<Row[]>("/api/solicitacoes").then(setRows);
-  useEffect(load,[]);
+  const load = () => {
+    get<Row[]>("/api/solicitacoes")
+      .then(setRows)
+      .catch((e: ApiError) => setErr(e.message || e.error));
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const grouped = useMemo(()=>{
     if(!groupByAnalista) return null;
@@ -46,6 +54,7 @@ export default function ListSolicitacoes(){
           </label>
         </div>
         <div className="card-b">
+          {err && <div className="alert" style={{ marginBottom: 8 }}>{err}</div>}
           {!groupByAnalista ? (
             <table className="table">
               <thead><tr><th>Título</th><th>Área</th><th>Solicitante</th><th>Analista</th><th>Status</th><th style={{ width: 90 }}>Ações</th></tr></thead>

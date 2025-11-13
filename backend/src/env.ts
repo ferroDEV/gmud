@@ -9,13 +9,6 @@ export const config = {
     host: process.env.LDAP_HOST || "",
     username: process.env.LDAP_USERNAME || "",
     password: process.env.LDAP_PASSWORD || "",
-    baseDn: process.env.LDAP_BASE_DN || "",
-    roleMap: (process.env.LDAP_ROLE_MAP || "")
-      .split(";")
-      .filter(Boolean)
-      .map((pair) => {
-        const [role, dn] = pair.split("=");
-        return { role, dn };
-      }),
+    baseDn: process.env.LDAP_BASE_DN || ""
   },
 };

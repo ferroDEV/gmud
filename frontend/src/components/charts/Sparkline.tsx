@@ -1,5 +1,4 @@
 import React from 'react';
-
 export default function Sparkline({ data, width=360, height=140 }:{ data:number[]; width?:number; height?:number }){
   const max = Math.max(...data) || 1;
   const min = Math.min(...data) || 0;
